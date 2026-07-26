@@ -969,12 +969,37 @@
     source.src = src;
     source.type = 'video/mp4';
     heroVideo.appendChild(source);
+
+    // Belt-and-braces for mobile autoplay policies (especially iOS Safari):
+    // muted must be set as a JS property, not just an HTML attribute, and
+    // playsinline needs the webkit-prefixed variant too on older iOS versions.
+    heroVideo.muted = true;
+    heroVideo.setAttribute('muted', '');
+    heroVideo.setAttribute('playsinline', '');
+    heroVideo.setAttribute('webkit-playsinline', '');
+
     heroVideo.load();
 
-    if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if(reducedMotion){
       heroVideo.removeAttribute('autoplay');
     } else {
-      heroVideo.play().catch(()=>{});
+      const tryPlay = () => heroVideo.play().catch(()=>{});
+      tryPlay();
+      heroVideo.addEventListener('loadedmetadata', tryPlay);
+      heroVideo.addEventListener('canplay', tryPlay);
+
+      // Last-resort fallback: some mobile browsers only allow playback
+      // after the very first user gesture on the page. If the video is
+      // still paused at that point, start it then.
+      const resumeOnInteraction = () => {
+        if(heroVideo.paused){ tryPlay(); }
+        document.removeEventListener('touchstart', resumeOnInteraction);
+        document.removeEventListener('click', resumeOnInteraction);
+      };
+      document.addEventListener('touchstart', resumeOnInteraction, { once:true, passive:true });
+      document.addEventListener('click', resumeOnInteraction, { once:true });
     }
   }
 
